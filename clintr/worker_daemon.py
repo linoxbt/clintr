@@ -34,9 +34,15 @@ def main():
                     response.raise_for_status()
                     logging.info("Registered edge node %s", node)
                 elif not existing["active"]:
-                    logging.error("Node %s is inactive with remaining stake; manual withdrawal is required", node)
-                    time.sleep(15)
-                    continue
+                    withdrawal = client.post(f"/nodes/{node}/withdraw")
+                    if withdrawal.status_code == 400:
+                        logging.warning("Node %s cannot withdraw while a job is unsettled", node)
+                        time.sleep(15)
+                        continue
+                    withdrawal.raise_for_status()
+                    response = client.post("/nodes/register", json={"address": node, "stake": stake})
+                    response.raise_for_status()
+                    logging.info("Re-registered pruned demo node %s", node)
                 if time.monotonic() - last_heartbeat >= 15:
                     response = client.post(f"/nodes/{node}/heartbeat")
                     response.raise_for_status()

@@ -12,11 +12,11 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 
 from .compute import MAX_INPUT, MAX_OUTPUT, MODEL, MLP_MODEL, MODELS, digest, run, verify
 from .db import Grid
-from .store import BlobStore, KuboStore
+from .store import configured_store
 
 app = FastAPI(title="Clintr", version="0.1.0")
 grid = Grid(os.environ.get("CLINTR_DATABASE_URL") or os.environ.get("CLINTR_DB", "/tmp/clintr-demo.sqlite3"))
-blobs = KuboStore(os.environ["CLINTR_IPFS_API"]) if os.environ.get("CLINTR_IPFS_API") else BlobStore(os.environ.get("CLINTR_BLOBS", "/tmp/clintr-blobs"))
+blobs = configured_store()
 jobs_total = Counter("clintr_jobs_total", "Jobs created")
 jobs_success = Counter("clintr_jobs_success_total", "Jobs verified successfully")
 jobs_failed = Counter("clintr_jobs_failed_total", "Jobs rejected by verifier")

@@ -20,10 +20,13 @@ With Docker installed:
 
 ```bash
 export CLINTR_DEMO_TOKEN=choose-a-long-local-secret
+python3 scripts/setup_cluster_secret.py
 docker compose up --build
 ```
 
-Open **http://127.0.0.1:8000**. Open **Settings → Local demo access**, enter the same token, then submit a job from the Overview or Jobs page. The Compose worker automatically accepts and verifies it. Prometheus is at `http://127.0.0.1:9090`; Grafana is at `http://127.0.0.1:3000` (Grafana's first-run credentials are managed by Grafana). Docker Compose includes PostgreSQL, one Kubo IPFS node, the API, the worker, maintenance, Prometheus, and Grafana. Set `CLINTR_POSTGRES_PASSWORD` to override the local-only database password.
+The setup script stores one 64-character secret in the ignored `.env` file for all three Cluster peers. Do not commit that file.
+
+Open **http://127.0.0.1:8000**. Open **Settings → Local demo access**, enter the same token, then submit a job from the Overview or Jobs page. The Compose worker automatically accepts and verifies it. Prometheus is at `http://127.0.0.1:9090`; Grafana is at `http://127.0.0.1:3000` (Grafana's first-run credentials are managed by Grafana). Docker Compose includes PostgreSQL, three Kubo nodes coordinated by three IPFS Cluster peers, the API, the worker, maintenance, Prometheus, and Grafana. Uploads return only after Cluster reports three pinned replicas. Set `CLINTR_POSTGRES_PASSWORD` to override the local-only database password.
 
 For a lightweight install without Docker:
 
@@ -63,7 +66,7 @@ Compose uses Kubo's private RPC API; it is not published to the host.
 - `contracts/clintr.py` uses real payable stake and tip escrow. A funded reward pool reserves a stake-sized **bonus** when a node accepts a job, then pays it upon success; the node's original stake remains locked until withdrawal. Without pre-funding, assignment is rejected. Half of a dishonest node's stake goes into the pool; the client's tip is refunded. Requeued jobs retain the tip until completion or cancellation. After three missed deadline windows, the contract cancels and refunds automatically when a keeper calls `check_timeout`.
 - GenLayer contract methods do not run on their own when a deadline passes. A deployed grid needs a keeper to submit `check_timeout(job_id)` and `prune_node(address)` transactions. The Compose maintenance process covers only the local demo.
 - The supported models are `byte_histogram_v1` and `edge_mlp_v1`. The MLP is fixed-weight integer neural inference over eight features from -128 to 127, supplied as `{"features":[12,-5,3,8,0,1,-2,4]}`. The validator fetches both input and output from an HTTPS IPFS gateway, checks both exact raw CIDs and the output SHA-256, and recomputes the full deterministic transform. A hash alone does **not** prove ResNet or other arbitrary AI inference was correct. Larger workloads need an independently reproducible model, a cryptographic proof system, or a clearly stated weaker verification policy.
-- Compose pins CIDv1 raw SHA-256 blocks to a single Kubo node. The standalone mode uses a local file store with the same CIDs. Production needs replicated pinning and a stable HTTPS gateway reachable by GenLayer validators. A single Kubo node is not an IPFS cluster. [Kubo RPC reference](https://docs.ipfs.tech/reference/kubo/rpc/).
+- Compose pins CIDv1 raw SHA-256 blocks through a three-peer IPFS Cluster and verifies all three pin statuses before accepting an upload. These peers share one host, so they do not survive host failure. The standalone mode uses a local file store with the same CIDs. The hosted Netlify demo still uses Netlify Blobs, so it does not yet use this cluster. A production deployment needs Cluster peers across independent hosts, persistent volumes, and a stable HTTPS gateway reachable by GenLayer validators. [IPFS Cluster API reference](https://ipfscluster.io/documentation/reference/api/).
 - A 100 ms client-to-edge network round trip is an infrastructure target. No global latency or 500-client load result is claimed here.
 
 ## Validation and deployment

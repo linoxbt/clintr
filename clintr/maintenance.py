@@ -4,12 +4,12 @@ import httpx
 
 from .compute import verify
 from .db import Grid
-from .store import BlobStore, KuboStore
+from .store import configured_store
 
 
 def main():
     grid = Grid(os.environ.get("CLINTR_DATABASE_URL") or os.environ.get("CLINTR_DB", "/tmp/clintr-demo.sqlite3"))
-    blobs = KuboStore(os.environ["CLINTR_IPFS_API"]) if os.environ.get("CLINTR_IPFS_API") else BlobStore(os.environ.get("CLINTR_BLOBS", "/tmp/clintr-blobs"))
+    blobs = configured_store()
     while True:
         result = grid.maintenance()
         for job in grid.list_jobs("pending_verification", 100, oldest_first=True):

@@ -13,14 +13,15 @@ This tracks the original full-app requirements against verified behavior. A pass
 | Worker and monitoring | Fixed for local stack; worker Prometheus metrics and maintenance proof retry | Compose smoke and Prometheus targets |
 | CI and deploy reproducibility | Fixed; pinned GenVM artifact with SHA-256 check; Netlify build configuration | GitHub Actions CI run `39485348968` passed |
 | Hosted CID reads | Fixed; stored bytes are checked against the requested CID | Live Netlify smoke `/blobs/{cid}` and `/ipfs/{cid}` |
+| Local IPFS replication | Three Cluster peers pin every accepted raw CID on three Kubo nodes; reads fail over when the first Kubo node stops | Compose smoke completed histogram and MLP jobs; `ipfs-cluster-ctl status` showed `PINNED` on cluster0, cluster1, and cluster2; secondary-node read returned the exact output |
 
 ## Open production requirements
 
 | Severity | Requirement / finding | Current limitation | Required closure |
 | --- | --- | --- | --- |
-| Critical | Real GEN staking, slashing, reward payout | Contract is not deployed on Studionet; hosted API uses no contract transactions | Fund dedicated deployer, deploy and fund reward pool, connect wallet/API to contract, execute live success and failure transactions |
+| Critical | Real GEN staking, slashing, reward payout | Contract is not deployed on Studionet; hosted API uses no contract transactions. Dedicated deployer `0xaacfb80e036b9d8f2117dad053469565878896dd` returned `0x0` from the Studionet balance RPC on 2026-10-20. | Fund dedicated deployer, deploy and fund reward pool, connect wallet/API to contract, execute live success and failure transactions |
 | High | Distributed edge execution | Netlify runs jobs in one Function; local Docker worker is not publicly deployed | Deploy persistent regional workers with authenticated assignment and result submission |
-| High | Durable decentralized storage | Hosted Netlify Blobs are a centralized CID mirror; Compose has one Kubo node | Deploy replicated IPFS pinning and a validator-reachable HTTPS gateway |
+| High | Durable decentralized storage | Compose now has three IPFS Cluster peers and three Kubo replicas on one machine, verified with both workload outputs. Hosted Netlify Blobs remain a centralized CID mirror. | Host persistent Cluster peers across independent failure domains, move the hosted upload/read path to them, and expose a validator-reachable HTTPS gateway |
 | High | Production identity and transport | Local demo uses a shared token and HTTP loopback; no node mTLS or wallet-bound node registration | Implement wallet-signed node operations and TLS/mTLS on deployed services |
 | High | Automatic on-chain liveness | Contract timeout and prune methods require a transaction caller | Deploy a funded keeper and verify missed heartbeat/deadline behavior live |
 | High | SLA and scale | No 100 ms geographic RTT or 500-client load evidence; hosted state is capped and serialized | Deploy regional infrastructure and run measured load/latency tests |

@@ -2,6 +2,7 @@
 from pathlib import Path
 import os
 import tempfile
+import time
 import httpx
 from .compute import CID_PATTERN, raw_cid
 
@@ -65,3 +66,67 @@ class KuboStore:
         if raw_cid(response.content) != cid:
             raise ValueError("Content does not match CID")
         return response.content
+
+
+class ClusterStore:
+    """Add raw blocks through IPFS Cluster and require full replication."""
+
+    def __init__(self, cluster_api: str, kubo_apis: list[str], replicas: int = 3):
+        self.cluster_api = cluster_api.rstrip("/")
+        if not kubo_apis:
+            raise ValueError("At least one Kubo read endpoint is required")
+        self.kubos = [KuboStore(api) for api in kubo_apis]
+        self.replicas = replicas
+
+    def put(self, data: bytes) -> str:
+        expected = raw_cid(data)
+        response = httpx.post(
+            self.cluster_api + "/add",
+            params={
+                "cid-version": 1,
+                "raw-leaves": "true",
+                "replication-min": self.replicas,
+                "replication-max": self.replicas,
+                "wait": "true",
+                "wait-timeout": "30s",
+                "stream-channels": "false",
+            },
+            files={"file": ("block", data, "application/octet-stream")},
+            timeout=45,
+        )
+        response.raise_for_status()
+        entries = response.json()
+        if len(entries) != 1 or entries[0].get("cid") != expected:
+            raise ValueError("IPFS Cluster returned an unexpected CID")
+        for attempt in range(20):
+            status = httpx.get(self.cluster_api + "/pins/" + expected, timeout=10)
+            status.raise_for_status()
+            peers = status.json().get("peer_map", {})
+            pinned = sum(peer.get("status") == "pinned" for peer in peers.values())
+            if pinned >= self.replicas:
+                return expected
+            if attempt < 19:
+                time.sleep(0.5)
+        raise RuntimeError(f"IPFS Cluster pinned only {pinned}/{self.replicas} replicas")
+
+    def get(self, cid: str) -> bytes:
+        if not CID_PATTERN.fullmatch(cid):
+            raise ValueError("Invalid raw CID")
+        last_error = None
+        for kubo in self.kubos:
+            try:
+                return kubo.get(cid)
+            except (FileNotFoundError, ValueError, httpx.HTTPError) as error:
+                last_error = error
+        raise last_error or FileNotFoundError(cid)
+
+
+def configured_store():
+    cluster = os.environ.get("CLINTR_CLUSTER_API")
+    kubo = os.environ.get("CLINTR_IPFS_API")
+    if cluster:
+        if not kubo:
+            raise ValueError("CLINTR_IPFS_API is required with CLINTR_CLUSTER_API")
+        read_apis = [api.strip() for api in os.environ.get("CLINTR_IPFS_READ_APIS", kubo).split(",") if api.strip()]
+        return ClusterStore(cluster, read_apis)
+    return KuboStore(kubo) if kubo else BlobStore(os.environ.get("CLINTR_BLOBS", "/tmp/clintr-blobs"))
