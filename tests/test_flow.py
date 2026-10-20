@@ -18,7 +18,7 @@ def test_complete_and_reject(tmp_path, monkeypatch):
     auth = {"X-Demo-Token": "test-secret"}
     assert client.get("/").status_code == 200
     assert "Clintr" in client.get("/").text
-    assert "with receipts." in client.get("/").text
+    assert "blind trust." in client.get("/").text
     assert 'data-wallet-button' in client.get("/").text
     assert "projectId" in client.get("/wallet/config").json()
     for page, label in {"overview": "grid overview", "jobs": "compute jobs", "nodes": "edge nodes", "activity": "grid activity", "settings": "settings"}.items():
