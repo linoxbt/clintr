@@ -75,6 +75,11 @@ def config():
     return {"name": "Clintr", "mode": "local_demo", "models": [{"id": MODEL, "name": "Byte histogram", "description": "A deterministic 16-bin transform that can be independently verified", "max_input_bytes": MAX_INPUT}], "min_stake": 50, "heartbeat_seconds": 30}
 
 
+@app.get("/wallet/config")
+def wallet_config():
+    return {"projectId": os.environ.get("CLINTR_REOWN_PROJECT_ID", "")}
+
+
 @app.post("/auth/check", dependencies=[Depends(demo_auth)])
 def check_access():
     return {"valid": True, "mode": "local_demo"}
@@ -220,7 +225,7 @@ if WEB_DIR.exists():
 
     @app.get("/", include_in_schema=False)
     def index(request: Request):
-        return templates.TemplateResponse(request, "overview.html", {"page": "overview", "page_title": "Overview"})
+        return templates.TemplateResponse(request, "landing.html", {"hosted": False})
 
     @app.get("/app/{page}", include_in_schema=False)
     def app_page(request: Request, page: str):

@@ -35,7 +35,7 @@
     return options.binary ? response.blob() : response.json();
   }
   async function validateToken(token) { const response = await fetch('/auth/check',{method:'POST',headers:{'X-Demo-Token':token}}); if(!response.ok) throw new Error('That demo access token was not accepted'); }
-  function needToken() { if (state.token) return true; openModal('access'); toast('Connect your local demo access first', true); return false; }
+  function needToken() { if (state.token) return true; openModal('access'); toast('Demo writes require the separate access token', true); return false; }
   async function loadData(force = false) {
     try {
       const [stats, jobs, events] = await Promise.all([api('/stats'), api('/jobs?limit=100'), api('/events?limit=80')]);
@@ -100,8 +100,6 @@
     const titles = {overview:'Overview',jobs:'Jobs',nodes:'Nodes',activity:'Activity',settings:'Settings'};
     document.getElementById('crumb').textContent = titles[view];
     document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.getAttribute('href') === '/app/' + view));
-    const button = document.getElementById('connection-button'); button.classList.toggle('connected', Boolean(state.token));
-    document.getElementById('connection-label').textContent = state.token ? 'Access connected' : 'Connect access';
     if (state.error && !state.synced) { main.innerHTML = `<div class="view-error"><h2>Clintr API is unavailable</h2><p>${esc(state.error)}</p><button class="primary-btn" data-action="refresh">Try again</button></div>`; return; }
     main.innerHTML = ({overview,jobs:jobsView,nodes:nodesView,activity:activityView,settings:settingsView})[view]();
     if (state.hosted) main.insertAdjacentHTML('afterbegin', '<div class="alert-box" style="margin-bottom:20px">Hosted demo: jobs run in a Netlify Function with simulated stake and rewards. The Python edge worker and on-chain contract are separate deployments.</div>');
@@ -139,7 +137,6 @@
     if(target.classList.contains('overlay') && event.target!==target) return;
     try { await action(target.dataset.action,target); } catch(error) { toast(error.message,true); }
   });
-  document.getElementById('connection-button').addEventListener('click',()=>openModal('access'));
   document.getElementById('refresh-button').addEventListener('click',()=>loadData(true));
   document.getElementById('mobile-menu').addEventListener('click',()=>document.querySelector('.sidebar').classList.toggle('open'));
   document.addEventListener('input', event => { if(event.target.id==='job-search'){state.search=event.target.value.toLowerCase();document.querySelectorAll('tbody tr[data-search]').forEach(row=>row.hidden=!row.dataset.search.includes(state.search));} });

@@ -2,13 +2,15 @@
 
 Clintr is a runnable edge compute **app in local demo mode** plus a GenLayer contract candidate. The browser app lets you submit jobs, follow proofs and settlements, inspect nodes, review activity, and view health. A separate edge worker registers, heartbeats, and processes jobs automatically. The API handles byte-exact independent verification, slashing, timeouts, and Prometheus/Grafana monitoring.
 
-The browser has five separate pages: `/app/overview`, `/app/jobs`, `/app/nodes`, `/app/activity`, and `/app/settings`. The SVG brand assets are `web/logo-mark.svg`, `web/logo-dark.svg`, and `web/logo-light.svg`.
+The public landing page is `/`. The workspace has five separate pages: `/app/overview`, `/app/jobs`, `/app/nodes`, `/app/activity`, and `/app/settings`. The SVG brand assets are `web/logo-mark.svg`, `web/logo-dark.svg`, and `web/logo-light.svg`.
 
 ## Hosted demo
 
 The Netlify site at [clintr-grid.netlify.app](https://clintr-grid.netlify.app) serves the five pages and a small function-backed demo API. It stores uploaded bytes and job records in Netlify Blobs, recomputes the deterministic byte histogram, and exposes the output CID and proof hash. The Netlify function acts as the demo worker; its node stake and GEN balances are simulated. The hosted demo does not use the Python edge worker, PostgreSQL, Kubo IPFS, or the GenLayer contract. Use Docker Compose below for those services locally.
 
-Netlify mutations require the `CLINTR_DEMO_TOKEN` configured as a Netlify production secret. Set the same token in the browser's **Connect access** control. The token is intentionally absent from this repository. To regenerate static documents after changing `web/`, run `uv run python scripts/export_site.py` before pushing or deploying. Then run `netlify deploy --prod --dir public --functions netlify/functions --no-build`. `uv run python scripts/smoke_netlify.py` verifies an uploaded input, completed job, output bytes, and proof on the live site.
+The landing page and workspace have a Reown AppKit **Connect wallet** button for GenLayer Studionet. Create a project at [Reown Dashboard](https://dashboard.reown.com/), allow `https://clintr-grid.netlify.app` as an origin, and set its public project ID as `CLINTR_REOWN_PROJECT_ID` in Netlify or your local environment. The button explains the missing configuration until the ID is set. Wallet connection identifies an address but does not authorize demo API writes or submit transactions; the Studionet contract is still undeployed.
+
+Netlify mutations require the separate `CLINTR_DEMO_TOKEN` configured as a Netlify production secret. Enter the same token in **Settings → Local demo access** (or the prompt shown when submitting a job). The token is intentionally absent from this repository. To regenerate the wallet bundle and static documents after changing `web/`, run `npm ci`, `npm run build:wallet`, then `uv run python scripts/export_site.py` before pushing or deploying. Deploy with `netlify deploy --prod --dir public --functions netlify/functions --no-build`. `uv run python scripts/smoke_netlify.py` verifies an uploaded input, completed job, output bytes, and proof on the live site.
 
 The supplied specification's `genlayer.lockbond`, `callvalidator`, and validator-registry flow do not match the current GenLayer contract API. This project uses payable methods for escrow and GenLayer's [Equivalence Principle](https://docs.genlayer.com/developers/intelligent-contracts/equivalence-principle) for independent verification. The contract passes `genvm-lint check`, but has **not been deployed or live-tested**.
 
@@ -21,7 +23,7 @@ export CLINTR_DEMO_TOKEN=choose-a-long-local-secret
 docker compose up --build
 ```
 
-Open **http://127.0.0.1:8000**. Select **Connect access**, enter the same token, then submit a job from the Overview or Jobs page. The Compose worker automatically accepts and verifies it. Prometheus is at `http://127.0.0.1:9090`; Grafana is at `http://127.0.0.1:3000` (Grafana's first-run credentials are managed by Grafana). Docker Compose includes PostgreSQL, one Kubo IPFS node, the API, the worker, maintenance, Prometheus, and Grafana. Set `CLINTR_POSTGRES_PASSWORD` to override the local-only database password.
+Open **http://127.0.0.1:8000**. Open **Settings → Local demo access**, enter the same token, then submit a job from the Overview or Jobs page. The Compose worker automatically accepts and verifies it. Prometheus is at `http://127.0.0.1:9090`; Grafana is at `http://127.0.0.1:3000` (Grafana's first-run credentials are managed by Grafana). Docker Compose includes PostgreSQL, one Kubo IPFS node, the API, the worker, maintenance, Prometheus, and Grafana. Set `CLINTR_POSTGRES_PASSWORD` to override the local-only database password.
 
 For a lightweight install without Docker:
 

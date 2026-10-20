@@ -74,6 +74,7 @@ export default async function handler(request) {
     const parts = path.split("/").filter(Boolean);
     const method = request.method;
     if (path === "/health" && method === "GET") return json({ status: "ok", mode: "netlify_demo" });
+    if (path === "/wallet/config" && method === "GET") return json({ projectId: process.env.CLINTR_REOWN_PROJECT_ID || "" });
     if (path === "/auth/check" && method === "POST") return auth(request) ? json({ valid: true }) : error("Invalid demo access token", 401);
     if (method !== "GET" && !auth(request)) return error("Set X-Demo-Token for demo mutations", 401);
 
@@ -191,5 +192,5 @@ export default async function handler(request) {
 }
 
 export const config = {
-  path: ["/health", "/auth/check", "/stats", "/nodes", "/nodes/*", "/events", "/jobs", "/jobs/*", "/blobs", "/blobs/*", "/metrics"],
+  path: ["/health", "/wallet/config", "/auth/check", "/stats", "/nodes", "/nodes/*", "/events", "/jobs", "/jobs/*", "/blobs", "/blobs/*", "/metrics"],
 };

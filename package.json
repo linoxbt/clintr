@@ -4,6 +4,15 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@netlify/blobs": "^11.1.5"
+    "@netlify/blobs": "^11.1.5",
+    "@reown/appkit": "^1.8.24",
+    "@reown/appkit-adapter-ethers": "^1.8.24",
+    "ethers": "^6.17.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.4"
+  },
+  "scripts": {
+    "build:wallet": "vite build"
   }
 }

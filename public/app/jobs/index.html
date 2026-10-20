@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/assets/styles.css">
   <link rel="stylesheet" href="/assets/brand.css">
   <script src="/assets/app.js" defer></script>
+  <script src="/assets/wallet.js" type="module"></script>
 </head>
 <body data-view="jobs" data-hosted="true">
   <div class="shell">
@@ -32,7 +33,7 @@
       <div class="side-footer"><span class="avatar">C</span><span><strong>Hosted demo</strong><small>Demo environment</small></span><span class="online-dot"></span></div>
     </aside>
     <div class="main-wrap">
-      <header class="topbar"><button class="mobile-menu" id="mobile-menu" aria-label="Open menu">☰</button><div class="breadcrumb"><span>Workspace</span><span class="slash">/</span><strong id="crumb">Jobs</strong></div><div class="top-actions"><span class="env-badge"><span class="pulse-dot"></span> HOSTED DEMO</span><button class="icon-button" id="refresh-button" title="Refresh data" aria-label="Refresh data"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2 6M20 4v7h-7"/></svg></button><button class="connection-button" id="connection-button"><span class="connection-dot"></span><span id="connection-label">Connect access</span></button></div></header>
+      <header class="topbar"><button class="mobile-menu" id="mobile-menu" aria-label="Open menu">☰</button><div class="breadcrumb"><span>Workspace</span><span class="slash">/</span><strong id="crumb">Jobs</strong></div><div class="top-actions"><span class="env-badge"><span class="pulse-dot"></span> HOSTED DEMO</span><button class="icon-button" id="refresh-button" title="Refresh data" aria-label="Refresh data"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2 6M20 4v7h-7"/></svg></button><button class="connection-button" id="connection-button" data-wallet-button><span class="connection-dot"></span><span data-wallet-label>Connect wallet</span></button></div></header>
       <main id="main" tabindex="-1"><div class="loading-view"><div class="loading-orbit"></div><p>Loading compute jobs…</p></div></main>
       <footer class="app-footer"><span>CLINTR / VERIFIABLE EDGE COMPUTE</span><span id="footer-sync">Waiting for data</span></footer>
     </div>
