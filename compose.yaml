@@ -1,0 +1,77 @@
+services:
+  api:
+    build: .
+    environment:
+      CLINTR_DEMO_TOKEN: ${CLINTR_DEMO_TOKEN:?Set CLINTR_DEMO_TOKEN}
+      CLINTR_IPFS_API: http://ipfs:5001
+      CLINTR_DATABASE_URL: postgresql://clintr@postgres:5432/clintr
+      PGPASSWORD: ${CLINTR_POSTGRES_PASSWORD:-local-demo-db-password}
+    depends_on:
+      ipfs:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
+  maintenance:
+    build: .
+    environment:
+      CLINTR_DATABASE_URL: postgresql://clintr@postgres:5432/clintr
+      PGPASSWORD: ${CLINTR_POSTGRES_PASSWORD:-local-demo-db-password}
+    depends_on:
+      api:
+        condition: service_healthy
+    command: ["python", "-m", "clintr.maintenance"]
+  worker:
+    build: .
+    environment:
+      CLINTR_API_URL: http://api:8000
+      CLINTR_DEMO_TOKEN: ${CLINTR_DEMO_TOKEN:?Set CLINTR_DEMO_TOKEN}
+      CLINTR_WORKER_NODE: clintr-demo-node
+      CLINTR_WORKER_STAKE: 50
+    depends_on:
+      api:
+        condition: service_healthy
+    command: ["python", "-m", "clintr.worker_daemon"]
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./ops/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:9090:9090"
+  ipfs:
+    image: ipfs/kubo:v0.43.1
+    volumes:
+      - ipfs_data:/data/ipfs
+    ports:
+      - "4001:4001"
+      - "4001:4001/udp"
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: clintr
+      POSTGRES_USER: clintr
+      POSTGRES_PASSWORD: ${CLINTR_POSTGRES_PASSWORD:-local-demo-db-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clintr -d clintr"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  grafana:
+    image: grafana/grafana:11.2.0
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./ops/grafana-datasource.yml:/etc/grafana/provisioning/datasources/clintr.yml:ro
+      - ./ops/grafana-dashboard-provider.yml:/etc/grafana/provisioning/dashboards/clintr.yml:ro
+      - ./ops/clintr-dashboard.json:/var/lib/grafana/dashboards/clintr.json:ro
+volumes:
+  ipfs_data:
+  postgres_data:

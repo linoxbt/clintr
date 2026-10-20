@@ -1,0 +1,15 @@
+{
+  "uid": "clintr-grid",
+  "title": "Clintr Grid",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": {"from": "now-1h", "to": "now"},
+  "panels": [
+    {"id": 1, "type": "timeseries", "title": "Job success rate", "datasource": "Prometheus", "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8}, "targets": [{"expr": "sum(rate(clintr_jobs_success_total[5m])) / clamp_min(sum(rate(clintr_jobs_success_total[5m])) + sum(rate(clintr_jobs_failed_total[5m])), 0.001)", "legendFormat": "Success fraction"}]},
+    {"id": 2, "type": "timeseries", "title": "Verification latency", "datasource": "Prometheus", "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8}, "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(clintr_verification_seconds_bucket[5m])))", "legendFormat": "p95 seconds"}]},
+    {"id": 3, "type": "timeseries", "title": "Node heartbeat", "datasource": "Prometheus", "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8}, "targets": [{"expr": "clintr_node_up", "legendFormat": "{{address}}"}]},
+    {"id": 4, "type": "timeseries", "title": "Node stake (simulated GEN)", "datasource": "Prometheus", "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8}, "targets": [{"expr": "clintr_node_stake", "legendFormat": "{{address}}"}]},
+    {"id": 5, "type": "timeseries", "title": "Jobs by status", "datasource": "Prometheus", "gridPos": {"x": 0, "y": 16, "w": 24, "h": 8}, "targets": [{"expr": "clintr_jobs_status", "legendFormat": "{{status}}"}]}
+  ]
+}

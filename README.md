@@ -1,0 +1,68 @@
+# Clintr
+
+Clintr is a runnable edge compute **app in local demo mode** plus a GenLayer contract candidate. The browser app lets you submit jobs, follow proofs and settlements, inspect nodes, review activity, and view health. A separate edge worker registers, heartbeats, and processes jobs automatically. The API handles byte-exact independent verification, slashing, timeouts, and Prometheus/Grafana monitoring.
+
+The browser has five separate pages: `/app/overview`, `/app/jobs`, `/app/nodes`, `/app/activity`, and `/app/settings`. The SVG brand assets are `web/logo-mark.svg`, `web/logo-dark.svg`, and `web/logo-light.svg`.
+
+The supplied specification's `genlayer.lockbond`, `callvalidator`, and validator-registry flow do not match the current GenLayer contract API. This project uses payable methods for escrow and GenLayer's [Equivalence Principle](https://docs.genlayer.com/developers/intelligent-contracts/equivalence-principle) for independent verification. The contract passes `genvm-lint check`, but has **not been deployed or live-tested**.
+
+## Run the full local app
+
+With Docker installed:
+
+```bash
+export CLINTR_DEMO_TOKEN=choose-a-long-local-secret
+docker compose up --build
+```
+
+Open **http://127.0.0.1:8000**. Select **Connect access**, enter the same token, then submit a job from the Overview or Jobs page. The Compose worker automatically accepts and verifies it. Prometheus is at `http://127.0.0.1:9090`; Grafana is at `http://127.0.0.1:3000` (Grafana's first-run credentials are managed by Grafana). Docker Compose includes PostgreSQL, one Kubo IPFS node, the API, the worker, maintenance, Prometheus, and Grafana. Set `CLINTR_POSTGRES_PASSWORD` to override the local-only database password.
+
+For a lightweight install without Docker:
+
+```bash
+uv sync --extra dev
+export CLINTR_DEMO_TOKEN=local-secret
+uv run uvicorn clintr.api:app --host 127.0.0.1 --port 8000
+```
+
+In a second shell, run the automatic worker:
+
+```bash
+CLINTR_DEMO_TOKEN=local-secret uv run python -m clintr.worker_daemon
+```
+
+Run `uv run python -m clintr.maintenance` in a third shell for automatic timeout and heartbeat maintenance. The standalone mode uses the local content-addressed blob store; Docker Compose uses Kubo IPFS. You can use the browser app in both modes.
+
+For a manual API call, register a node and upload input:
+
+```bash
+curl -X POST http://127.0.0.1:8000/nodes/register -H 'X-Demo-Token: local-secret' -H 'Content-Type: application/json' -d '{"address":"node-1","stake":50}'
+curl -X POST http://127.0.0.1:8000/blobs -H 'X-Demo-Token: local-secret' --data-binary 'hello'
+```
+
+Use the returned `cid` to create a job:
+
+```bash
+curl -X POST http://127.0.0.1:8000/jobs -H 'X-Demo-Token: local-secret' -H 'Content-Type: application/json' -d '{"client":"alice","model_id":"byte_histogram_v1","input_cid":"<CID>","tip":3,"deadline_seconds":30}'
+uv run python -m clintr.worker <JOB_ID> --node node-1 --token local-secret
+```
+
+Compose uses Kubo's private RPC API; it is not published to the host.
+
+## Boundaries
+
+- The browser app is a **local simulation**. Compose persists jobs and nodes in PostgreSQL; standalone mode uses SQLite. Neither ledger locks, transfers, or slashes real GEN. The shared demo token is for localhost use only, and Docker publishes the API on loopback. Production needs wallet-based authentication, TLS, and a contract-backed API adapter.
+- `contracts/clintr.py` uses real payable stake and tip escrow. A funded reward pool pays a stake-sized **bonus** upon success; the node's original stake remains locked until withdrawal. Without pre-funding, a contract cannot create a double-stake reward. Half of a dishonest node's stake goes into the pool; the client's tip is refunded. Requeued jobs retain the tip until completion or cancellation.
+- GenLayer contract methods do not run on their own when a deadline passes. A deployed grid needs a keeper to submit `check_timeout(job_id)` and `prune_node(address)` transactions. The Compose maintenance process covers only the local demo.
+- The example model is `byte_histogram_v1`, with a 64 KiB input limit. The validator fetches both input and output from an HTTPS IPFS gateway, checks both exact raw CIDs and the output SHA-256, and recomputes the full deterministic transform. A hash alone does **not** prove ResNet or other arbitrary AI inference was correct. Such workloads need an independently reproducible model, a cryptographic proof system, or a clearly stated weaker verification policy.
+- Compose pins CIDv1 raw SHA-256 blocks to a single Kubo node. The standalone mode uses a local file store with the same CIDs. Production needs replicated pinning and a stable HTTPS gateway reachable by GenLayer validators. A single Kubo node is not an IPFS cluster. [Kubo RPC reference](https://docs.ipfs.tech/reference/kubo/rpc/).
+- A 100 ms client-to-edge network round trip is an infrastructure target. No global latency or 500-client load result is claimed here.
+
+## Validation and deployment
+
+```bash
+uv run --extra dev --extra contract-test pytest -q
+uv run --extra contract-test genvm-lint check contracts/clintr.py
+```
+
+To deploy, follow GenLayer's [CLI deployment guide](https://docs.genlayer.com/developers/intelligent-contracts/deploying/cli-deployment): select a network, configure a funded account and fee profile, then run `genlayer deploy --contract contracts/clintr.py --args https://YOUR-GATEWAY/ipfs/`. Fund `fund_rewards` before verifying successful jobs. Deployment, validator execution, fee behavior, and real GEN payouts require live-network validation; they are not asserted by this repository.
