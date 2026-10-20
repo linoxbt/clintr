@@ -11,11 +11,11 @@
   <link rel="stylesheet" href="/assets/brand.css">
   <script src="/assets/app.js" defer></script>
 </head>
-<body data-view="{{ page }}">
+<body data-view="{{ page }}" data-hosted="{% if hosted %}true{% else %}false{% endif %}">
   <div class="shell">
     <aside class="sidebar" aria-label="Main navigation">
       <a class="brand" href="/app/overview" aria-label="Clintr home"><img src="/assets/logo-dark.svg" alt="Clintr"></a>
-      <div class="workspace-switch"><span class="workspace-glyph">C</span><span><strong>Clintr Grid</strong><small>Local workspace</small></span><span class="chevron">⌄</span></div>
+      <div class="workspace-switch"><span class="workspace-glyph">C</span><span><strong>Clintr Grid</strong><small>{% if hosted %}Hosted workspace{% else %}Local workspace{% endif %}</small></span><span class="chevron">⌄</span></div>
       <div class="side-label">WORKSPACE</div>
       <nav class="nav">
         <a class="nav-item{% if page == 'overview' %} active{% endif %}" href="/app/overview"{% if page == 'overview' %} aria-current="page"{% endif %}><svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z"/></svg>Overview</a>
@@ -29,10 +29,10 @@
       </nav>
       <div class="sidebar-spacer"></div>
       <div class="side-help"><div class="side-help-icon">↗</div><strong>Designed for verifiability</strong><p>Jobs are checked against their input before a node is rewarded.</p><a href="https://docs.genlayer.com/developers/intelligent-contracts/equivalence-principle" target="_blank" rel="noopener noreferrer">How verification works <span>↗</span></a></div>
-      <div class="side-footer"><span class="avatar">C</span><span><strong>Local grid</strong><small>Demo environment</small></span><span class="online-dot"></span></div>
+      <div class="side-footer"><span class="avatar">C</span><span><strong>{% if hosted %}Hosted demo{% else %}Local grid{% endif %}</strong><small>Demo environment</small></span><span class="online-dot"></span></div>
     </aside>
     <div class="main-wrap">
-      <header class="topbar"><button class="mobile-menu" id="mobile-menu" aria-label="Open menu">☰</button><div class="breadcrumb"><span>Workspace</span><span class="slash">/</span><strong id="crumb">{{ page_title }}</strong></div><div class="top-actions"><span class="env-badge"><span class="pulse-dot"></span> LOCAL DEMO</span><button class="icon-button" id="refresh-button" title="Refresh data" aria-label="Refresh data"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2 6M20 4v7h-7"/></svg></button><button class="connection-button" id="connection-button"><span class="connection-dot"></span><span id="connection-label">Connect access</span></button></div></header>
+      <header class="topbar"><button class="mobile-menu" id="mobile-menu" aria-label="Open menu">☰</button><div class="breadcrumb"><span>Workspace</span><span class="slash">/</span><strong id="crumb">{{ page_title }}</strong></div><div class="top-actions"><span class="env-badge"><span class="pulse-dot"></span> {% if hosted %}HOSTED DEMO{% else %}LOCAL DEMO{% endif %}</span><button class="icon-button" id="refresh-button" title="Refresh data" aria-label="Refresh data"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2 6M20 4v7h-7"/></svg></button><button class="connection-button" id="connection-button"><span class="connection-dot"></span><span id="connection-label">Connect access</span></button></div></header>
       <main id="main" tabindex="-1">{% block main %}{% endblock %}</main>
       <footer class="app-footer"><span>CLINTR / VERIFIABLE EDGE COMPUTE</span><span id="footer-sync">Waiting for data</span></footer>
     </div>

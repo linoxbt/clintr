@@ -4,6 +4,12 @@ Clintr is a runnable edge compute **app in local demo mode** plus a GenLayer con
 
 The browser has five separate pages: `/app/overview`, `/app/jobs`, `/app/nodes`, `/app/activity`, and `/app/settings`. The SVG brand assets are `web/logo-mark.svg`, `web/logo-dark.svg`, and `web/logo-light.svg`.
 
+## Hosted demo
+
+The Netlify site at [clintr-grid.netlify.app](https://clintr-grid.netlify.app) serves the five pages and a small function-backed demo API. It stores uploaded bytes and job records in Netlify Blobs, recomputes the deterministic byte histogram, and exposes the output CID and proof hash. The Netlify function acts as the demo worker; its node stake and GEN balances are simulated. The hosted demo does not use the Python edge worker, PostgreSQL, Kubo IPFS, or the GenLayer contract. Use Docker Compose below for those services locally.
+
+Netlify mutations require the `CLINTR_DEMO_TOKEN` configured as a Netlify production secret. Set the same token in the browser's **Connect access** control. The token is intentionally absent from this repository. To regenerate static documents after changing `web/`, run `uv run python scripts/export_site.py` before pushing or deploying. Then run `netlify deploy --prod --dir public --functions netlify/functions --no-build`. `uv run python scripts/smoke_netlify.py` verifies an uploaded input, completed job, output bytes, and proof on the live site.
+
 The supplied specification's `genlayer.lockbond`, `callvalidator`, and validator-registry flow do not match the current GenLayer contract API. This project uses payable methods for escrow and GenLayer's [Equivalence Principle](https://docs.genlayer.com/developers/intelligent-contracts/equivalence-principle) for independent verification. The contract passes `genvm-lint check`, but has **not been deployed or live-tested**.
 
 ## Run the full local app

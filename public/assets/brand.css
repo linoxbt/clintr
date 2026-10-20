@@ -1,0 +1,3 @@
+.brand { display: block; padding: 0 12px 29px; }
+.brand img { display: block; width: 165px; height: 48px; object-fit: contain; object-position: left center; }
+.nav-item { text-decoration: none; }

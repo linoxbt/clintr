@@ -1,0 +1,30 @@
+[build]
+  publish = "public"
+
+[functions]
+  directory = "netlify/functions"
+
+[[redirects]]
+  from = "/app/overview"
+  to = "/app/overview/"
+  status = 301
+
+[[redirects]]
+  from = "/app/jobs"
+  to = "/app/jobs/"
+  status = 301
+
+[[redirects]]
+  from = "/app/nodes"
+  to = "/app/nodes/"
+  status = 301
+
+[[redirects]]
+  from = "/app/activity"
+  to = "/app/activity/"
+  status = 301
+
+[[redirects]]
+  from = "/app/settings"
+  to = "/app/settings/"
+  status = 301

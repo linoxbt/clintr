@@ -7,4 +7,6 @@ __pycache__/
 .env
 dist/
 artifacts/
+node_modules/
+.netlify/
 *.egg-info/
