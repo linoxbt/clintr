@@ -1,5 +1,7 @@
 """Content addressed local store for the runnable demo; raw CIDs also work with Kubo."""
 from pathlib import Path
+import os
+import tempfile
 import httpx
 from .compute import CID_PATTERN, raw_cid
 
@@ -13,7 +15,16 @@ class BlobStore:
         cid = raw_cid(data)
         target = self.root / cid
         if not target.exists():
-            target.write_bytes(data)
+            descriptor, pending = tempfile.mkstemp(prefix=".clintr-", dir=self.root)
+            try:
+                with os.fdopen(descriptor, "wb") as stream:
+                    stream.write(data)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(pending, target)
+            finally:
+                if os.path.exists(pending):
+                    os.unlink(pending)
         return cid
 
     def get(self, cid: str) -> bytes:

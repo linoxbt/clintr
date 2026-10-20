@@ -4,3 +4,6 @@ scrape_configs:
   - job_name: clintr
     static_configs:
       - targets: ["api:8000"]
+  - job_name: clintr_worker
+    static_configs:
+      - targets: ["worker:9101"]

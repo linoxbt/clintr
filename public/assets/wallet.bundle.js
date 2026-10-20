@@ -177307,5 +177307,26 @@ async function non() {
 		eon = void 0, Qan(e.message);
 	}
 }
+async function ron() {
+	let e = await (eon ||= ton()), t = e.getAccount("eip155");
+	if (!t?.address) throw await e.open({ view: "Connect" }), Error("Connect your wallet, then submit again to sign in.");
+	let n = e.getWalletProvider();
+	if (!n?.request) throw Error("The connected wallet cannot sign messages.");
+	let r = await fetch(`/auth/challenge?address=${encodeURIComponent(t.address)}`, { cache: "no-store" });
+	if (!r.ok) throw Error("Could not start wallet sign in.");
+	let i = await r.json(), a = await n.request({
+		method: "personal_sign",
+		params: [i.message, t.address]
+	}), o = await fetch("/auth/session", {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({
+			address: t.address,
+			signature: a
+		})
+	});
+	if (!o.ok) throw Error("Wallet signature was not accepted.");
+	return o.json();
+}
 //#endregion
-export { non as openWallet };
+export { non as openWallet, ron as signIn };

@@ -2,7 +2,7 @@ import time
 
 from fastapi.testclient import TestClient
 
-from clintr.compute import MODEL, digest, raw_cid, run
+from clintr.compute import MODEL, MLP_MODEL, digest, raw_cid, run
 from clintr.db import Grid
 from clintr.store import BlobStore, KuboStore
 import clintr.api as api
@@ -63,8 +63,13 @@ def test_deadline_requeue_and_heartbeat_slash(tmp_path):
     assert grid.maintenance(now + 6)["requeued_jobs"] == 1
     assert grid.get_job(job)["status"] == "requeued"
     assert grid.get_job(job)["attempts"] == 1
+    assert grid.maintenance(now + 37)["requeued_jobs"] == 1
     assert grid.maintenance(now + 91)["pruned_nodes"] == 1
     assert grid.stats()["nodes"][0]["stake"] == 25
+    assert grid.get_job(job)["status"] == "cancelled"
+    with grid.tx() as db:
+        refunds = db.execute("SELECT count(*) AS count FROM ledger WHERE job_id=? AND reason='tip_refunded'", (job,)).fetchone()["count"]
+    assert refunds == 1
 
 
 def test_bad_auth_and_late_result(tmp_path, monkeypatch):
@@ -103,3 +108,37 @@ def test_kubo_raw_block_round_trip(monkeypatch):
     assert store.put(block) == cid
     assert calls[0][1]["params"]["pin"] == "true"
     assert store.get(cid) == block
+
+
+def test_worker_queue_reads_oldest_jobs_first(tmp_path):
+    grid = Grid(str(tmp_path / "grid.db"))
+    created = [grid.create_job("alice", MODEL, raw_cid(b"x"), 1, 60, 100 + i) for i in range(105)]
+    assert [job["id"] for job in grid.list_jobs("open", 100, oldest_first=True)][0] == created[0]
+    assert created[0] not in [job["id"] for job in grid.list_jobs("open", 100)]
+
+
+def test_unavailable_proof_refunded_after_grace_once(tmp_path):
+    grid = Grid(str(tmp_path / "grid.db"))
+    now = int(time.time())
+    grid.register("node", 50, now)
+    job = grid.create_job("client", MODEL, raw_cid(b"input"), 4, 10, now)
+    grid.assign(job, "node", now)
+    grid.submit(job, "node", raw_cid(b"output"), digest(b"output"), now + 1)
+    assert grid.maintenance(now + 3610)["expired_proofs"] == 0
+    assert grid.maintenance(now + 3611)["expired_proofs"] == 1
+    assert grid.maintenance(now + 3612)["expired_proofs"] == 0
+    assert grid.get_job(job)["status"] == "cancelled"
+    with grid.tx() as db:
+        count = db.execute("SELECT count(*) AS count FROM ledger WHERE job_id=? AND reason='tip_refunded'", (job,)).fetchone()["count"]
+    assert count == 1
+
+
+def test_integer_mlp_reference_vector_and_validation():
+    source = b'{"features":[12,-5,3,8,0,1,-2,4]}'
+    assert run(MLP_MODEL, source) == b'{"class":0,"scores":[86,-3]}'
+    for invalid in (b'{"features":[1,2]}', b'{"features":[1,2,3,4,5,6,7,true]}', b'{"features":[1,2,3,4,5,6,7,128]}'):
+        try:
+            run(MLP_MODEL, invalid)
+            assert False, "invalid model input accepted"
+        except ValueError:
+            pass

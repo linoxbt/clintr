@@ -82,3 +82,24 @@ export async function openWallet() {
     inform(error.message)
   }
 }
+
+export async function signIn() {
+  const modal = await (modalPromise ||= init())
+  const account = modal.getAccount('eip155')
+  if (!account?.address) {
+    await modal.open({ view: 'Connect' })
+    throw new Error('Connect your wallet, then submit again to sign in.')
+  }
+  const provider = modal.getWalletProvider()
+  if (!provider?.request) throw new Error('The connected wallet cannot sign messages.')
+  const challengeResponse = await fetch(`/auth/challenge?address=${encodeURIComponent(account.address)}`, { cache: 'no-store' })
+  if (!challengeResponse.ok) throw new Error('Could not start wallet sign in.')
+  const challenge = await challengeResponse.json()
+  const signature = await provider.request({ method: 'personal_sign', params: [challenge.message, account.address] })
+  const sessionResponse = await fetch('/auth/session', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ address: account.address, signature })
+  })
+  if (!sessionResponse.ok) throw new Error('Wallet signature was not accepted.')
+  return sessionResponse.json()
+}

@@ -9,6 +9,7 @@ from psycopg.rows import dict_row
 
 MIN_STAKE = 50
 HEARTBEAT_SECONDS = 30
+MAX_ATTEMPTS = 3
 
 
 class _PostgresConnection:
@@ -39,6 +40,7 @@ class Grid:
     def __init__(self, path: str):
         self.path = path
         self.postgres = path.startswith("postgresql://") or path.startswith("postgres://")
+        self.row_lock = " FOR UPDATE" if self.postgres else ""
         with self.tx() as db:
             ledger_id = "BIGSERIAL PRIMARY KEY" if self.postgres else "INTEGER PRIMARY KEY"
             event_id = ledger_id
@@ -80,7 +82,7 @@ class Grid:
         if not address or stake < MIN_STAKE:
             raise ValueError("Address and at least 50 simulated GEN required")
         with self.tx() as db:
-            prior = db.execute("SELECT stake,active FROM nodes WHERE address=?", (address,)).fetchone()
+            prior = db.execute("SELECT stake,active FROM nodes WHERE address=?" + self.row_lock, (address,)).fetchone()
             if prior and (prior["stake"] or prior["active"]):
                 raise ValueError("Node already registered; withdraw remaining stake first")
             if prior:
@@ -97,8 +99,8 @@ class Grid:
                 raise ValueError("Unknown or inactive node")
 
     def create_job(self, client: str, model_id: str, input_cid: str, tip: int, deadline_seconds: int, now: int | None = None) -> str:
-        from .compute import MODEL, CID_PATTERN
-        if not client or model_id != MODEL or not CID_PATTERN.fullmatch(input_cid) or tip < 1 or not 1 <= deadline_seconds <= 3600:
+        from .compute import MODELS, CID_PATTERN
+        if not client or model_id not in MODELS or not CID_PATTERN.fullmatch(input_cid) or tip < 1 or not 1 <= deadline_seconds <= 3600:
             raise ValueError("Invalid job parameters")
         job_id = str(uuid.uuid4())
         with self.tx() as db:
@@ -107,13 +109,14 @@ class Grid:
             self._event(db, "job_created", job_id, client, f"{model_id} · {tip} GEN tip")
         return job_id
 
-    def list_jobs(self, status: str | None = None, limit: int = 50) -> list[dict]:
+    def list_jobs(self, status: str | None = None, limit: int = 50, oldest_first: bool = False) -> list[dict]:
         limit = max(1, min(limit, 100))
+        order = "ASC" if oldest_first else "DESC"
         with self.tx() as db:
             if status:
-                rows = db.execute("SELECT * FROM jobs WHERE status=? ORDER BY created_at DESC,id DESC LIMIT ?", (status, limit)).fetchall()
+                rows = db.execute(f"SELECT * FROM jobs WHERE status=? ORDER BY created_at {order},id {order} LIMIT ?", (status, limit)).fetchall()
             else:
-                rows = db.execute("SELECT * FROM jobs ORDER BY created_at DESC,id DESC LIMIT ?", (limit,)).fetchall()
+                rows = db.execute(f"SELECT * FROM jobs ORDER BY created_at {order},id {order} LIMIT ?", (limit,)).fetchall()
         return [dict(row) for row in rows]
 
     def list_events(self, limit: int = 40) -> list[dict]:
@@ -131,7 +134,7 @@ class Grid:
     def assign(self, job_id: str, node: str, now: int | None = None):
         now = now or int(time.time())
         with self.tx() as db:
-            active = db.execute("SELECT 1 FROM nodes WHERE address=? AND active=1 AND heartbeat>=?", (node, now - 3 * HEARTBEAT_SECONDS)).fetchone()
+            active = db.execute("SELECT 1 FROM nodes WHERE address=? AND active=1 AND heartbeat>=?" + self.row_lock, (node, now - 3 * HEARTBEAT_SECONDS)).fetchone()
             if not active:
                 raise ValueError("Node unavailable")
             result = db.execute("UPDATE jobs SET assigned_node=?,status='assigned' WHERE id=? AND status IN ('open','requeued') AND deadline>?", (node, job_id, now))
@@ -152,10 +155,12 @@ class Grid:
 
     def settle(self, job_id: str, valid: bool):
         with self.tx() as db:
-            job = db.execute("SELECT * FROM jobs WHERE id=? AND status='pending_verification'", (job_id,)).fetchone()
+            job = db.execute("SELECT * FROM jobs WHERE id=? AND status='pending_verification'" + self.row_lock, (job_id,)).fetchone()
             if job is None:
                 raise ValueError("Job is not awaiting verification")
-            node = db.execute("SELECT * FROM nodes WHERE address=?", (job["assigned_node"],)).fetchone()
+            node = db.execute("SELECT * FROM nodes WHERE address=?" + self.row_lock, (job["assigned_node"],)).fetchone()
+            if node is None:
+                raise ValueError("Assigned node no longer exists")
             if valid:
                 db.execute("UPDATE jobs SET status='completed' WHERE id=?", (job_id,))
                 db.execute("INSERT INTO ledger(address,delta,reason,job_id) VALUES (?,?,?,?)", (node["address"], job["tip"], "tip_paid", job_id))
@@ -171,21 +176,42 @@ class Grid:
     def maintenance(self, now: int | None = None) -> dict:
         now = now or int(time.time())
         with self.tx() as db:
-            stale = db.execute("SELECT address,stake FROM nodes WHERE active=1 AND heartbeat<?", (now - 3 * HEARTBEAT_SECONDS,)).fetchall()
+            stale = db.execute("SELECT address,stake FROM nodes WHERE active=1 AND heartbeat<?" + self.row_lock, (now - 3 * HEARTBEAT_SECONDS,)).fetchall()
+            pruned = 0
             for node in stale:
                 slash = node["stake"] // 2
-                db.execute("UPDATE nodes SET active=0,stake=stake-? WHERE address=?", (slash, node["address"]))
+                result = db.execute("UPDATE nodes SET active=0,stake=stake-? WHERE address=? AND active=1 AND heartbeat<?", (slash, node["address"], now - 3 * HEARTBEAT_SECONDS))
+                if result.rowcount != 1:
+                    continue
+                pruned += 1
                 db.execute("INSERT INTO ledger(address,delta,reason) VALUES (?,?,?)", (node["address"], -slash, "heartbeat_slash"))
                 self._event(db, "node_pruned", address=node["address"], detail=f"Missed heartbeats · {slash} GEN slashed")
-            expired = db.execute("SELECT id FROM jobs WHERE status IN ('open','assigned') AND deadline<?", (now,)).fetchall()
+            expired = db.execute("SELECT id,client,tip,attempts FROM jobs WHERE status IN ('open','assigned','requeued') AND deadline<?" + self.row_lock, (now,)).fetchall()
+            requeued = 0
             for job in expired:
-                db.execute("UPDATE jobs SET status='requeued',assigned_node=NULL,attempts=attempts+1,deadline=? WHERE id=?", (now + 30, job["id"]))
-                self._event(db, "job_requeued", job["id"], detail="Deadline elapsed")
-            return {"pruned_nodes": len(stale), "requeued_jobs": len(expired)}
+                if job["attempts"] + 1 >= MAX_ATTEMPTS:
+                    result = db.execute("UPDATE jobs SET status='cancelled',assigned_node=NULL,attempts=attempts+1 WHERE id=? AND status IN ('open','assigned','requeued') AND deadline<?", (job["id"], now))
+                    if result.rowcount == 1:
+                        db.execute("INSERT INTO ledger(address,delta,reason,job_id) VALUES (?,?,?,?)", (job["client"], job["tip"], "tip_refunded", job["id"]))
+                        self._event(db, "job_cancelled", job["id"], detail="Retry limit reached; tip refunded")
+                else:
+                    result = db.execute("UPDATE jobs SET status='requeued',assigned_node=NULL,attempts=attempts+1,deadline=? WHERE id=? AND status IN ('open','assigned','requeued') AND deadline<?", (now + 30, job["id"], now))
+                    if result.rowcount == 1:
+                        requeued += 1
+                        self._event(db, "job_requeued", job["id"], detail="Deadline elapsed")
+            pending = db.execute("SELECT id,client,tip FROM jobs WHERE status='pending_verification' AND deadline<?" + self.row_lock, (now - 3600,)).fetchall()
+            cancelled = 0
+            for job in pending:
+                result = db.execute("UPDATE jobs SET status='cancelled' WHERE id=? AND status='pending_verification' AND deadline<?", (job["id"], now - 3600))
+                if result.rowcount == 1:
+                    cancelled += 1
+                    db.execute("INSERT INTO ledger(address,delta,reason,job_id) VALUES (?,?,?,?)", (job["client"], job["tip"], "tip_refunded", job["id"]))
+                    self._event(db, "job_cancelled", job["id"], detail="Proof unavailable after one-hour grace; tip refunded")
+            return {"pruned_nodes": pruned, "requeued_jobs": requeued, "expired_proofs": cancelled}
 
     def cancel_job(self, job_id: str, client: str):
         with self.tx() as db:
-            job = db.execute("SELECT * FROM jobs WHERE id=? AND client=? AND status='requeued'", (job_id, client)).fetchone()
+            job = db.execute("SELECT * FROM jobs WHERE id=? AND client=? AND status='requeued'" + self.row_lock, (job_id, client)).fetchone()
             if job is None:
                 raise ValueError("Only the client can cancel a requeued job")
             db.execute("UPDATE jobs SET status='cancelled' WHERE id=?", (job_id,))
@@ -194,7 +220,7 @@ class Grid:
 
     def withdraw_node(self, address: str) -> int:
         with self.tx() as db:
-            node = db.execute("SELECT * FROM nodes WHERE address=?", (address,)).fetchone()
+            node = db.execute("SELECT * FROM nodes WHERE address=?" + self.row_lock, (address,)).fetchone()
             if node is None or node["stake"] <= 0:
                 raise ValueError("Node has no stake to withdraw")
             assigned = db.execute("SELECT 1 FROM jobs WHERE assigned_node=? AND status IN ('assigned','pending_verification') LIMIT 1", (address,)).fetchone()

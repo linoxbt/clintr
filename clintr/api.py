@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
-from .compute import MAX_INPUT, MAX_OUTPUT, MODEL, digest, run, verify
+from .compute import MAX_INPUT, MAX_OUTPUT, MODEL, MLP_MODEL, MODELS, digest, run, verify
 from .db import Grid
 from .store import BlobStore, KuboStore
 
@@ -72,7 +72,7 @@ def health():
 
 @app.get("/config")
 def config():
-    return {"name": "Clintr", "mode": "local_demo", "models": [{"id": MODEL, "name": "Byte histogram", "description": "A deterministic 16-bin transform that can be independently verified", "max_input_bytes": MAX_INPUT}], "min_stake": 50, "heartbeat_seconds": 30}
+    return {"name": "Clintr", "mode": "local_demo", "models": [{"id": MODEL, "name": "Byte histogram", "description": "A deterministic 16-bin transform", "max_input_bytes": MAX_INPUT}, {"id": MLP_MODEL, "name": "Edge MLP", "description": "Fixed-weight integer neural inference over eight features", "max_input_bytes": MAX_INPUT}], "min_stake": 50, "heartbeat_seconds": 30}
 
 
 @app.get("/wallet/config")
@@ -99,7 +99,7 @@ async def upload_blob(request: Request):
 @app.get("/blobs/{cid}")
 def get_blob(cid: str):
     try:
-        return Response(blobs.get(cid), media_type="application/octet-stream")
+        return Response(blobs.get(cid), media_type="application/octet-stream", headers={"X-Content-Type-Options": "nosniff", "Content-Disposition": "attachment"})
     except (ValueError, FileNotFoundError):
         raise HTTPException(404, "Unknown CID")
     except httpx.HTTPError:
@@ -132,11 +132,15 @@ def withdraw_node(address: str):
 @app.post("/jobs", dependencies=[Depends(demo_auth)])
 def create_job(payload: JobCreate):
     try:
-        blobs.get(payload.input_cid)
+        input_bytes = blobs.get(payload.input_cid)
     except (ValueError, FileNotFoundError):
         raise HTTPException(400, "Input CID is unavailable")
     except httpx.HTTPError:
         raise HTTPException(503, "IPFS unavailable")
+    try:
+        run(payload.model_id, input_bytes)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
     job_id = handle(grid.create_job, payload.client, payload.model_id, payload.input_cid, payload.tip, payload.deadline_seconds)
     jobs_total.inc()
     return {"job_id": job_id, "required_tip": payload.tip, "status": "open"}
@@ -148,8 +152,8 @@ def get_job(job_id: str):
 
 
 @app.get("/jobs")
-def list_jobs(status: str | None = None, limit: int = Query(default=50, ge=1, le=100)):
-    return grid.list_jobs(status, limit)
+def list_jobs(status: str | None = None, limit: int = Query(default=50, ge=1, le=100), oldest_first: bool = False):
+    return grid.list_jobs(status, limit, oldest_first)
 
 
 @app.post("/jobs/{job_id}/assign", dependencies=[Depends(demo_auth)])
