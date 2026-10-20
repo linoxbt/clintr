@@ -77,7 +77,7 @@ def config():
 
 @app.get("/wallet/config")
 def wallet_config():
-    return {"projectId": os.environ.get("CLINTR_REOWN_PROJECT_ID", "")}
+    return {"projectId": os.environ.get("CLINTR_REOWN_PROJECT_ID", "f0d6f8162be1beccf221b4e2f8bd7026")}
 
 
 @app.post("/auth/check", dependencies=[Depends(demo_auth)])
