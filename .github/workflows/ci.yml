@@ -23,6 +23,12 @@ jobs:
       - run: npm test
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run build:wallet
+      - name: Install pinned GenVM runner artifact
+        run: |
+          mkdir -p "$HOME/.cache/gltest-direct" "$HOME/.cache/genvm-linter"
+          curl -fL --retry 3 https://github.com/genlayerlabs/genvm/releases/download/v0.3.0-rc7/genvm-runners-all.tar.xz -o "$HOME/.cache/gltest-direct/genvm-universal-v0.3.0-rc7.tar.xz"
+          echo "e218a1854214681560351051f76fe2b878545cf3409455ef372d57014a88ca67  $HOME/.cache/gltest-direct/genvm-universal-v0.3.0-rc7.tar.xz" | sha256sum -c -
+          ln -s "$HOME/.cache/gltest-direct/genvm-universal-v0.3.0-rc7.tar.xz" "$HOME/.cache/genvm-linter/genvm-universal-v0.3.0-rc7.tar.xz"
       - run: uv run --extra dev --extra contract-test pytest -q
       - run: uv run --extra contract-test genvm-lint check contracts/clintr.py
       - run: uv run python scripts/export_site.py
