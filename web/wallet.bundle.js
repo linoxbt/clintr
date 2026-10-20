@@ -177283,6 +177283,8 @@ async function ton() {
 			},
 			features: {
 				analytics: !1,
+				email: !1,
+				socials: [],
 				onramp: !1,
 				swaps: !1
 			},

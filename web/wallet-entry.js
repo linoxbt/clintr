@@ -60,7 +60,7 @@ async function init() {
         url: window.location.origin,
         icons: [`${window.location.origin}/assets/favicon.svg`]
       },
-      features: { analytics: false, onramp: false, swaps: false },
+      features: { analytics: false, email: false, socials: [], onramp: false, swaps: false },
       themeMode: 'dark',
       themeVariables: { '--w3m-accent': '#c6f279', '--w3m-border-radius-master': '8px' }
     })
